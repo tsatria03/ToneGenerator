@@ -1,0 +1,206 @@
+#include"bgt_compat.nvgt"
+#include"sound_pool.nvgt"
+#include"includes/audioutils.nvgt"
+#include"includes/form.nvgt"
+#include"includes/speech.nvgt"
+bool is_playing=false;
+int keycheck1=KEY_1, keycheck2=KEY_2, keycheck3=KEY_3, keycheck4=KEY_4, keycheck5=KEY_5, 
+    keycheck6=KEY_6, keycheck7=KEY_7, keycheck8=KEY_8, keycheck9=KEY_9, keycheck10=KEY_0, 
+    keycheck11=KEY_Q, keycheck12=KEY_W, keycheck13=KEY_E, keycheck14=KEY_R, keycheck15=KEY_T, 
+    keycheck16=KEY_Y, keycheck17=KEY_U, keycheck18=KEY_I, keycheck19=KEY_O, keycheck20=KEY_P, 
+    keycheck21=KEY_A, keycheck22=KEY_S, keycheck23=KEY_D, keycheck24=KEY_F, keycheck25=KEY_G, 
+    keycheck26=KEY_H, keycheck27=KEY_J, keycheck28=KEY_K, keycheck29=KEY_L, keycheck30=KEY_Z, 
+    keycheck31=KEY_X, keycheck32=KEY_C, keycheck33=KEY_V, keycheck34=KEY_B, keycheck35=KEY_N, 
+    keycheck36=KEY_M;
+double current_amplitude=0.5;
+int current_waveform=0;
+int current_octave=0;
+const float BUFFER_DURATION=100;
+const uint SAMPLE_RATE=44100;
+sound@ note_sound;
+double[] base_frequencies(36);  
+
+double clamp(double value, double min, double max){
+value=value<min? min:value;
+value=value>max? max:value;
+return value;
+}
+void init_frequencies()
+{
+    base_frequencies[0] = 130.81;
+    base_frequencies[1] = 146.83;
+    base_frequencies[2] = 164.81;
+    base_frequencies[3] = 174.61;
+    base_frequencies[4] = 196.00;
+    base_frequencies[5] = 220.00;
+    base_frequencies[6] = 246.94;
+    base_frequencies[7] = 261.63;
+    base_frequencies[8] = 293.66;
+    base_frequencies[9] = 329.63;
+    base_frequencies[10] = 349.23;
+    base_frequencies[11] = 392.00;
+    base_frequencies[12] = 440.00;
+    base_frequencies[13] = 493.88;
+    base_frequencies[14] = 523.25;
+    base_frequencies[15] = 587.33;
+    base_frequencies[16] = 659.25;
+    base_frequencies[17] = 698.46;
+    base_frequencies[18] = 783.99;
+    base_frequencies[19] = 880.00;
+    base_frequencies[20] = 987.77;
+    base_frequencies[21] = 1046.50;
+    base_frequencies[22] = 1174.66;
+    base_frequencies[23] = 1318.51;
+    base_frequencies[24] = 1396.91;
+    base_frequencies[25] = 1567.98;
+    base_frequencies[26] = 1760.00;
+    base_frequencies[27] = 1975.53;
+    base_frequencies[28] = 2093.00;
+    base_frequencies[29] = 2349.32;
+    base_frequencies[30] = 2637.02;
+    base_frequencies[31] = 2793.83;
+    base_frequencies[32] = 3135.96;
+    base_frequencies[33] = 3520.00;
+    base_frequencies[34] = 3951.07;
+    base_frequencies[35] = 4186.01;
+}
+
+bool alt_is_down()
+{
+    return key_down(KEY_LMENU) or key_down(KEY_RMENU);
+}
+
+float[]@ generate_wave(uint freq, float dur, float amp)
+{
+    float[]@ samples;
+    switch(current_waveform)
+    {
+        case 0: @samples=sinewave(freq, dur, amp, SAMPLE_RATE); break;
+        case 1: @samples=triangle_wave(freq, dur, amp, SAMPLE_RATE); break;
+        case 2: @samples=pulse_wave(freq, dur, 0.5, amp, SAMPLE_RATE); break;
+        case 3: @samples=saw_wave(freq, dur, amp, SAMPLE_RATE); break;
+        default: @samples=sinewave(freq, dur, amp, SAMPLE_RATE);
+    }
+    return @samples;
+}
+void play_note(double base_frequency) 
+{
+    double actual_frequency = base_frequency * pow(2, current_octave);    
+    const double MAX_SAFE_FREQUENCY = SAMPLE_RATE / 2.5;     
+    if (actual_frequency > MAX_SAFE_FREQUENCY) {
+        return;
+    }
+    
+    float[]@ samples = generate_wave(uint(actual_frequency), BUFFER_DURATION, float(current_amplitude));
+    samples = adsr_envelope(samples, 5, BUFFER_DURATION-10, 1, 5, SAMPLE_RATE);
+    @note_sound = push_audio(samples, SAMPLE_RATE);
+    note_sound.play();
+}
+double minimum(double a, double b)
+{
+    return a < b ? a : b;
+}
+
+double maximum(double a, double b)
+{
+    return a > b ? a : b;
+}
+void main()
+{
+    init_frequencies();  
+    show_game_window("Keyboard Synthesizer");
+    wait(500);
+    speak("Welcome to the keyboard synthesizer. Use number and letter keys to play notes. Left and right arrows change octaves from minus 4 to plus 4. Hold alt and use left or right arrows to change waveform. Up and down arrows control volume.");
+    keyboard_synth();
+}
+
+void keyboard_synth()
+{
+    while(true)
+    {
+        wait(5);        
+        if(alt_is_down())
+        {
+            if(key_pressed(KEY_LEFT))
+            {
+                current_waveform=(current_waveform-1+4)%4;
+                string[]waveform_names={"sine","triangle","square","saw"};
+                speak(waveform_names[current_waveform]+" wave");
+            }
+            if(key_pressed(KEY_RIGHT))
+            {
+                current_waveform=(current_waveform+1)%4;
+                string[]waveform_names={"sine","triangle","square","saw"};
+                speak(waveform_names[current_waveform]+" wave");
+            }
+        }
+        else
+        {
+            if(key_pressed(KEY_LEFT))
+            {
+                current_octave = maximum(current_octave - 1, -4);
+                speak("Octave " + string(current_octave));
+            }
+            if(key_pressed(KEY_RIGHT))
+            {
+                current_octave = minimum(current_octave + 1, 4);
+                speak("Octave " + string(current_octave));
+            }
+        }
+        if(key_repeating(keycheck1) && 0 < base_frequencies.length()) play_note(base_frequencies[0]);
+        if(key_repeating(keycheck2) && 1 < base_frequencies.length()) play_note(base_frequencies[1]);
+        if(key_repeating(keycheck3) && 2 < base_frequencies.length()) play_note(base_frequencies[2]);
+        if(key_repeating(keycheck4) && 3 < base_frequencies.length()) play_note(base_frequencies[3]);
+        if(key_repeating(keycheck5) && 4 < base_frequencies.length()) play_note(base_frequencies[4]);
+        if(key_repeating(keycheck6) && 5 < base_frequencies.length()) play_note(base_frequencies[5]);
+        if(key_repeating(keycheck7) && 6 < base_frequencies.length()) play_note(base_frequencies[6]);
+        if(key_repeating(keycheck8) && 7 < base_frequencies.length()) play_note(base_frequencies[7]);
+        if(key_repeating(keycheck9) && 8 < base_frequencies.length()) play_note(base_frequencies[8]);
+        if(key_repeating(keycheck10) && 9 < base_frequencies.length()) play_note(base_frequencies[9]);
+        if(key_repeating(keycheck11) && 10 < base_frequencies.length()) play_note(base_frequencies[10]);
+        if(key_repeating(keycheck12) && 11 < base_frequencies.length()) play_note(base_frequencies[11]);
+        if(key_repeating(keycheck13) && 12 < base_frequencies.length()) play_note(base_frequencies[12]);
+        if(key_repeating(keycheck14) && 13 < base_frequencies.length()) play_note(base_frequencies[13]);
+        if(key_repeating(keycheck15) && 14 < base_frequencies.length()) play_note(base_frequencies[14]);
+        if(key_repeating(keycheck16) && 15 < base_frequencies.length()) play_note(base_frequencies[15]);
+        if(key_repeating(keycheck17) && 16 < base_frequencies.length()) play_note(base_frequencies[16]);
+        if(key_repeating(keycheck18) && 17 < base_frequencies.length()) play_note(base_frequencies[17]);
+        if(key_repeating(keycheck19) && 18 < base_frequencies.length()) play_note(base_frequencies[18]);
+        if(key_repeating(keycheck20) && 19 < base_frequencies.length()) play_note(base_frequencies[19]);
+        if(key_repeating(keycheck21) && 20 < base_frequencies.length()) play_note(base_frequencies[20]);
+        if(key_repeating(keycheck22) && 21 < base_frequencies.length()) play_note(base_frequencies[21]);
+        if(key_repeating(keycheck23) && 22 < base_frequencies.length()) play_note(base_frequencies[22]);
+        if(key_repeating(keycheck24) && 23 < base_frequencies.length()) play_note(base_frequencies[23]);
+        if(key_repeating(keycheck25) && 24 < base_frequencies.length()) play_note(base_frequencies[24]);
+        if(key_repeating(keycheck26) && 25 < base_frequencies.length()) play_note(base_frequencies[25]);
+        if(key_repeating(keycheck27) && 26 < base_frequencies.length()) play_note(base_frequencies[26]);
+        if(key_repeating(keycheck28) && 27 < base_frequencies.length()) play_note(base_frequencies[27]);
+        if(key_repeating(keycheck29) && 28 < base_frequencies.length()) play_note(base_frequencies[28]);
+        if(key_repeating(keycheck30) && 29 < base_frequencies.length()) play_note(base_frequencies[29]);
+        if(key_repeating(keycheck31) && 30 < base_frequencies.length()) play_note(base_frequencies[30]);
+        if(key_repeating(keycheck32) && 31 < base_frequencies.length()) play_note(base_frequencies[31]);
+        if(key_repeating(keycheck33) && 32 < base_frequencies.length()) play_note(base_frequencies[32]);
+        if(key_repeating(keycheck34) && 33 < base_frequencies.length()) play_note(base_frequencies[33]);
+        if(key_repeating(keycheck35) && 34 < base_frequencies.length()) play_note(base_frequencies[34]);
+        if(key_repeating(keycheck36) && 35 < base_frequencies.length()) play_note(base_frequencies[35]);
+        
+        if(key_pressed(KEY_UP))
+        {
+            current_amplitude=minimum(current_amplitude+0.05, 1.0);
+            speak(string(round(current_amplitude*100,0))+"percent volume");
+        }
+        if(key_pressed(KEY_DOWN))
+        {
+            current_amplitude=maximum(current_amplitude-0.05, 0.0);
+            speak(string(round(current_amplitude*100,0))+"percent volume");
+        }
+        if(key_pressed(KEY_ESCAPE))
+        {
+            if(@note_sound != null)
+            {
+                note_sound.stop();
+            }
+            exit();
+        }
+    }
+}

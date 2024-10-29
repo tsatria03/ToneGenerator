@@ -1,0 +1,135 @@
+#include"bgt_compat.nvgt"
+#include"sound_pool.nvgt"
+#include"includes/audioutils.nvgt"
+#include"includes/form.nvgt"
+#include"includes/speech.nvgt"
+bool is_playing=true;
+int keycheck1=KEY_1, keycheck2=KEY_2, keycheck3=KEY_3, keycheck4=KEY_4, keycheck5=KEY_5, keycheck6=KEY_6, keycheck7=KEY_7, keycheck8=KEY_8, keycheck9=KEY_9, keycheck10=KEY_0, keycheck11=KEY_Q, keycheck12=KEY_W, keycheck13=KEY_E, keycheck14=KEY_R, keycheck15=KEY_T, keycheck16=KEY_Y, keycheck17=KEY_U, keycheck18=KEY_I, keycheck19=KEY_O, keycheck20=KEY_P, keycheck21=KEY_A, keycheck22=KEY_S, keycheck23=KEY_D, keycheck24=KEY_F, keycheck25=KEY_G, keycheck26=KEY_H, keycheck27=KEY_J, keycheck28=KEY_K, keycheck29=KEY_L, keycheck30=KEY_Z, keycheck31=KEY_X, keycheck32=KEY_C, keycheck33=KEY_V, keycheck34=KEY_B, keycheck35=KEY_N, keycheck36=KEY_M;
+double current_frequency=440.0;
+double current_amplitude=0.5;
+int current_waveform=0;
+const float BUFFER_DURATION=100;
+const uint SAMPLE_RATE=44100;
+audio_form form;
+sound@ progress_sound;
+sound_pool pool;
+bool alt_is_down()
+{
+if(key_down(KEY_LMENU) or key_down(KEY_RMENU))
+{
+return true;
+}
+return false;
+}
+double clamp(double value,double min,double max)
+{
+value=value<min?min:value;
+value=value>max?max:value;
+return value;
+}
+float[]@ generate_wave(uint freq,float dur,float amp)
+{
+float[]@ samples;
+switch(current_waveform)
+{
+case 0:
+@samples=sinewave(freq,dur,amp,SAMPLE_RATE);
+break;
+case 1:
+@samples=triangle_wave(freq,dur,amp,SAMPLE_RATE);
+break;
+case 2:
+@samples=pulse_wave(freq,dur,0.5,amp,SAMPLE_RATE);
+break;
+case 3:
+@samples=saw_wave(freq,dur,amp,SAMPLE_RATE);
+break;
+default:
+@samples=sinewave(freq,dur,amp,SAMPLE_RATE);
+}
+return @samples;
+}
+void play_tone()
+{
+float[]@ samples=generate_wave(uint(current_frequency), BUFFER_DURATION, float(current_amplitude));
+samples=adsr_envelope(samples, 5, BUFFER_DURATION-10, 1, 5, SAMPLE_RATE);
+@progress_sound=push_audio(samples, SAMPLE_RATE);
+progress_sound.play_looped();
+}
+void main()
+{
+show_game_window("Tone generator");
+wait(500);
+speak("Use the arrow keys to adjust the frequency and volume of the sound. Use alt plus the arrow keys to change the wave form shape of the sound. Press the enter key to play  or  stop the sound.");
+tonegen();
+}
+void tonegen()
+{
+while(true)
+{
+wait(5);   
+if(is_playing && (progress_sound is null || !progress_sound.playing))
+{
+play_tone();
+}
+if(alt_is_down())
+{
+if(key_repeating(KEY_LEFT))
+{
+current_waveform=(current_waveform-1+4)%4;
+if(is_playing) play_tone();
+string[]waveform_names={"sine","triangle","square","saw"};
+speak(waveform_names[current_waveform]+" wave");
+}
+if(key_repeating(KEY_RIGHT))
+{
+current_waveform=(current_waveform+1)%4;
+if(is_playing) play_tone();
+string[]waveform_names={"sine","triangle","square","saw"};
+speak(waveform_names[current_waveform]+" wave");
+}
+}
+if(key_repeating(KEY_LEFT))
+{
+current_frequency=clamp(current_frequency-10,20,20000);
+if(is_playing) play_tone();
+speak(string(round(current_frequency,0))+"hertz");
+}
+if(key_repeating(KEY_RIGHT))
+{
+current_frequency=clamp(current_frequency+10,20,20000);
+if(is_playing) play_tone();
+speak(string(round(current_frequency,0))+"hertz");
+}
+if(key_repeating(KEY_DOWN))
+{
+current_amplitude=clamp(current_amplitude-0.05,0.0,1.0);
+if(is_playing) play_tone();
+speak(string(round(current_amplitude*100,0))+"percent volume");
+}
+if(key_repeating(KEY_UP))
+{
+current_amplitude=clamp(current_amplitude+0.05,0.0,1.0);
+if(is_playing) play_tone();
+speak(string(round(current_amplitude*100,0))+"percent volume");
+}
+if(key_pressed(KEY_RETURN))
+{
+is_playing=!is_playing;
+if(is_playing)
+{
+play_tone();
+speak("Playing");
+}else
+{
+if(progress_sound!is null) progress_sound.stop();
+speak("Stopped");
+}
+}
+if(key_pressed(KEY_ESCAPE))
+{
+if(progress_sound!is null) progress_sound.stop();
+exit();
+}
+}
+}
